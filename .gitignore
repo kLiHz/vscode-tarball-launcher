@@ -1,0 +1,11 @@
+# Ignore downloaded archives
+vscode-downloads/
+
+# Ignore extracted installations
+vscode-versions/
+
+# Ignore the active symlink
+code-stable
+
+# Ignore the background daemon lock file
+.vscode-updater.lock
