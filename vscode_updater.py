@@ -12,10 +12,11 @@ import time
 # ==========================================
 # Configuration
 # ==========================================
-BASE_DIR = os.path.expanduser("~/.local/share/vscode-versions")
-DOWNLOAD_DIR = os.path.expanduser("~/.local/share/vscode-downloads")
-SYMLINK_PATH = os.path.expanduser("~/.local/bin/code-stable")
-LOCK_FILE = "/tmp/vscode-updater.lock"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(SCRIPT_DIR, "vscode-versions")
+DOWNLOAD_DIR = os.path.join(SCRIPT_DIR, "vscode-downloads")
+SYMLINK_PATH = os.path.join(SCRIPT_DIR, "code-stable")
+LOCK_FILE = os.path.join(SCRIPT_DIR, ".vscode-updater.lock")
 
 API_URL = "https://update.code.visualstudio.com/api/update/linux-x64/stable/VERSION"
 

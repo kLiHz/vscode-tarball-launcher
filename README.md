@@ -2,62 +2,69 @@
 
 ![Assisted_by-Gemini-blueviolet?logo=googlegemini](https://img.shields.io/badge/Assisted_by-Gemini-blueviolet?logo=googlegemini) 
 
-This project provides a robust, background-capable auto-updater for Linux installations of VS Code that use the portable `.tar.gz` format (tarballs). It strictly replicates the clever side-by-side atomic update architecture used natively by VS Code on Windows.
+This project provides a robust, zero-configuration auto-updater for Linux installations of VS Code that use the portable `.tar.gz` format (tarballs). It strictly replicates the clever side-by-side atomic update architecture used natively by VS Code on Windows, and runs entirely in Python.
 
 ## The Problem: Why doesn't Linux natively self-update?
 
-If you use the official `.deb` or `.rpm` packages, your system's package manager handles updates perfectly. However, if you download the generic Linux `.tar.gz` archive (tarball), **VS Code does not auto-update natively**. When an update is found, clicking the "Download" button in VS Code merely invokes `openExternal()` to pass the download URL to your system's default web browser. You are expected to extract the new `.tar.gz` manually over the old files.
+If you use the official `.deb` or `.rpm` packages, your system's package manager handles updates perfectly. However, if you download the generic Linux `.tar.gz` archive (tarball), **VS Code does not auto-update natively**. When an update is found, clicking the "Download" button in VS Code merely opens your web browser to download the new `.tar.gz` file for you to extract manually.
 
 Why didn't the VS Code team implement native auto-updating for tarballs like they did for Windows or macOS?
 
-1. **The Permission Problem:**
-   On Windows, installers can trigger UAC prompts. On macOS, dragging to `/Applications` is standard. On Linux, users typically extract the tarball to root-owned system directories like `/opt/vscode` or `/usr/local/bin`. VS Code runs as a standard user. Prompting for root access cross-distribution (using `pkexec`, `kdesu`, or `gksudo`) from within an Electron app is fragmented and unreliable.
-2. **File Locking and In-Memory Crashes:**
-   While Linux *does* allow you to delete or overwrite an open file (unlike Windows, which violently locks executing `.exe` files), overwriting the files of a running Electron application (especially shared `.so` libraries or `.asar` archives) is extremely dangerous. If Electron tries to page memory from disk and finds half of an `.asar` overwritten, it will instantly crash with a segmentation fault.
-3. **The Linux Ecosystem Standard:**
-   The standard philosophy on Linux is that the **System Package Manager** should handle updates, not individual applications. The tarball is explicitly treated as a "portable" or "manual" fallback.
+1. **The Permission Problem:** On Linux, users typically extract tarballs to root-owned system directories like `/opt`. Prompting for root access cross-distribution from an Electron app is fragmented and unreliable.
+2. **File Locking and In-Memory Crashes:** Overwriting the shared `.so` libraries or `.asar` archives of a running Electron application is extremely dangerous on Linux. It will instantly crash the app with a segmentation fault.
+3. **The Linux Ecosystem Standard:** The standard philosophy is that the System Package Manager should handle updates, not self-mutating applications.
 
-## The Solution: How VS Code updates on Windows (and how we copy it)
+## The Solution: The Windows Architecture (and how we copy it)
 
-On Windows, VS Code manages to gracefully update itself while running without triggering "File in use" errors by utilizing a custom updater tool (`inno_updater.exe`) and an architecture called the **Versioned Resources Folder**.
+On Windows, VS Code manages to gracefully update itself while running without triggering "File in use" errors by utilizing a custom background updater and an architecture called the **Versioned Resources Folder**.
 
-Instead of extracting the massive bulk of the application's code directly over the old files, the Windows background update process extracts the new version into a completely separate, uniquely named sub-folder right next to the current one (e.g., named after the Git commit hash of that release). When you restart VS Code, the main launcher executable is quickly swapped, and it simply points to the new versioned folder.
-
-**Because Linux handles file systems differently, this architecture is actually easier to implement on Linux using symlinks.**
+Instead of extracting new files directly over the old ones, the Windows background update process extracts the new version into a completely separate, uniquely named sub-folder next to the current one. When you restart VS Code, the tiny main launcher executable simply points to the new versioned folder.
 
 ## How this script works
 
-This bash script perfectly translates the Windows "Versioned Resources Folder" trick to Linux:
+This single Python script (`vscode_updater.py`) perfectly translates the Windows "Versioned Resources Folder" trick to Linux, acting as both the **Launcher** and the **Background Updater Daemon**. It is also fully portable.
 
-1. **User Setup:** It extracts the tarballs to a directory you own (e.g., `~/.local/share/vscode-versions`). Because you own this directory, the script never needs `sudo`.
-2. **Side-by-Side Versioning:** It fetches the latest payload URL from the VS Code update API and extracts the new update into a uniquely named folder based on the version (e.g., `vscode-1.86.0`).
-3. **Atomic Swapping via Symlinks:** Instead of swapping an executable, the script creates a symbolic link (e.g., `~/.local/bin/code-stable`) that points to the latest version folder. The update is applied by doing an atomic swap of the symlink target.
-4. **Zero Downtime:** Because the new files go into a new folder and the symlink is swapped instantly, the instance of VS Code you are actively typing in will not crash. It is still physically running from the old folder. The next time you launch the app, the symlink routes you to the new version seamlessly.
-5. **Resumable Downloads:** The script utilizes `curl -C -` to make downloads strictly resumable. If your network drops or your laptop hibernates halfway through downloading the 100MB+ payload, the script will pick up right where it left off on the next run.
-6. **Safe Extraction:** The archive is downloaded to a permanent location, extracted into a temporary hidden folder on the same filesystem, and then atomically `mv`'d into place. This guarantees you never end up with a half-extracted, broken application folder if the script is killed midway through.
-7. **Garbage Collection:** Old versioned folders are silently cleaned up, keeping only the two most recent versions to prevent your disk from filling up over time.
+1. **Portable Installation:** The script stores all installations and downloads inside its own directory (`./vscode-versions/`). You can place this folder anywhere on your machine (e.g., `~/tools/vscode-updater` or on a USB drive), and it won't clutter your home folder.
+2. **The "Launcher + Daemon" Model:**
+   When you run the script to launch VS Code, it does two things:
+   - **Forks a Background Daemon:** It spawns a detached, silent copy of itself (`--background-daemon`) to check for and download updates while you work.
+   - **Seamless Launching:** It instantly replaces its own process with the VS Code binary (`os.execv`). Your Window Manager sees the real Electron application start immediately. Grouping on your dock works perfectly.
+3. **Zero Configuration:** Because updates are checked when you launch the application (just like native VS Code), you don't need to configure `cron` jobs or `systemd` timers.
+4. **Pure Python Resumable Downloads:** The script uses Python's standard library to handle downloads. If your network drops, it will calculate the bytes downloaded and resume exactly where it left off on the next run.
+5. **Atomic Swapping via Symlinks:** Updates are applied by downloading a new folder and then instantly swapping a symbolic link (`./code-stable`). Your currently running editor is untouched.
+6. **Garbage Collection:** Old version folders are silently cleaned up, keeping only the two most recent versions.
 
 ## Usage
 
-### 1. Initial Setup
-Run the script to fetch and install the latest version:
+### 1. Place the Directory
+Move this `vscode-tarball-updater` directory to wherever you want your portable VS Code installation to live (e.g., `~/.local/opt/vscode-updater`).
+
+### 2. Initial Setup / Launch
+Run the script for the first time. It will download the latest version and launch VS Code:
 ```bash
-./update-vscode.sh
+./vscode_updater.py
 ```
 
-### 2. Configure your Path
-The script will create an executable symlink at `~/.local/bin/code-stable`.
-Ensure `~/.local/bin` is in your system `$PATH`, or configure your desktop shortcut (`.desktop` file) to point to `~/.local/bin/code-stable/bin/code`.
+### 3. Add to your Desktop (Optional)
+To use it like a normal application, point your Desktop Environment to the launcher.
 
-### 3. Automate the Background Update
-To make it function like a true background auto-updater, run the script periodically using `cron` or a `systemd` user timer.
+Create a file `~/.local/share/applications/code.desktop`:
+```ini
+[Desktop Entry]
+Name=Visual Studio Code
+Comment=Code Editing. Redefined.
+Exec=/path/to/vscode-tarball-updater/vscode_updater.py %F
+Icon=/path/to/vscode-tarball-updater/code-stable/resources/app/resources/linux/code.png
+Terminal=false
+Type=Application
+Categories=TextEditor;Development;IDE;
+```
 
-Example crontab entry (runs daily at 2:00 AM):
-```cron
-0 2 * * * /path/to/vscode-tarball-updater/update-vscode.sh > /dev/null 2>&1
+### Manual Updating
+If you prefer to force an update visibly instead of waiting for the background daemon, you can run:
+```bash
+./vscode_updater.py --update-now
 ```
 
 ## Requirements
-- `curl`
-- `tar`
-- `grep` (with perl-compatible regex support, standard on most Linux distros)
+- Python 3.6+ (No external pip packages required, uses only the standard library)
