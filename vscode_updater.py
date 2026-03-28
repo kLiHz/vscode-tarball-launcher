@@ -6,6 +6,7 @@ import shutil
 import tarfile
 import subprocess
 import time
+import platform
 
 # ==========================================
 # Configuration
@@ -15,6 +16,26 @@ BASE_DIR = os.path.join(SCRIPT_DIR, "vscode-versions")
 DOWNLOAD_DIR = os.path.join(SCRIPT_DIR, "vscode-downloads")
 SYMLINK_PATH = os.path.join(SCRIPT_DIR, "code-stable")
 LOCK_FILE = os.path.join(SCRIPT_DIR, ".vscode-updater.lock")
+
+# ==========================================
+# Helper: Get Architecture
+# ==========================================
+def get_vscode_arch():
+    """Maps Python's platform.machine() to VS Code's process.arch identifiers."""
+    # Allow overriding via environment variable
+    override = os.environ.get("VSCODE_ARCH")
+    if override:
+        return override
+
+    machine = platform.machine().lower()
+    if machine in ['x86_64', 'amd64']:
+        return 'x64'
+    elif machine in ['aarch64', 'arm64']:
+        return 'arm64'
+    elif machine.startswith('arm'):
+        return 'armhf'
+    else:
+        raise Exception(f"Unsupported architecture: {machine}. Please explicitly set the VSCODE_ARCH environment variable (e.g. VSCODE_ARCH=x64).")
 
 # ==========================================
 # Helper: Resumable Downloader (via curl)
@@ -84,7 +105,13 @@ def run_update(silent=False):
         except Exception as e:
             log(f"Warning: Could not read current version from {product_json_path}: {e}")
 
-    api_url = f"https://update.code.visualstudio.com/api/update/linux-x64/stable/{current_commit}"
+    try:
+        arch = get_vscode_arch()
+    except Exception as e:
+        log(f"Error: {e}")
+        return
+
+    api_url = f"https://update.code.visualstudio.com/api/update/linux-{arch}/stable/{current_commit}"
     
     try:
         payload, status = fetch_api(api_url)

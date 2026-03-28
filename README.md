@@ -31,8 +31,9 @@ This single Python script (`vscode_updater.py`) perfectly translates the Windows
    - **Seamless Launching:** It instantly replaces its own process with the VS Code binary (`os.execv`). Your Window Manager sees the real Electron application start immediately. Grouping on your dock works perfectly.
 3. **Smart API Checking:** It reads your currently installed commit hash and queries the Microsoft API. If you are already on the latest version, the API returns an `HTTP 204 No Content` and the script silently exits.
 4. **Resumable Downloads (Proxy Aware):** The script calls `curl` under the hood. This guarantees flawless support for corporate `http_proxy`, `https_proxy`, and `all_proxy` (SOCKS5) environments. It natively resumes broken downloads if your network drops.
-5. **Atomic Swapping via Symlinks:** Updates are applied by downloading a new folder and then instantly swapping a symbolic link (`./code-stable`). Your currently running editor is untouched.
-6. **Garbage Collection:** Old version folders are silently cleaned up, keeping only the two most recent versions.
+5. **Multi-Architecture Support:** Automatically detects your system's architecture (`x64`, `arm64`, or `armhf`) and pulls the correct native build. If you are on an unsupported architecture or want to force a specific build, you can override it using the `VSCODE_ARCH` environment variable (e.g., `VSCODE_ARCH=x64 ./vscode_updater.py`).
+6. **Atomic Swapping via Symlinks:** Updates are applied by downloading a new folder and then instantly swapping a symbolic link (`./code-stable`). Your currently running editor is untouched.
+7. **Garbage Collection:** Old version folders are silently cleaned up, keeping only the two most recent versions.
 
 ## Usage
 
