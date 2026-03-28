@@ -45,28 +45,31 @@ Run the script for the first time. It will download the latest version and launc
 ./vscode_updater.py
 ```
 
-### 3. Add to your Desktop (Optional)
-To use it like a normal application, point your Desktop Environment to the launcher.
+### 3. Desktop Integration
+To use it like a normal application, point your Desktop Environment to the launcher. 
 
-*Note: For strict sandboxed environments (like Flatpak task managers) to see the icon, it is highly recommended to copy the icon into your system's icon directory rather than referencing it via an absolute path.*
+For strict sandboxed environments (like Flatpak task managers) and proper Wayland/X11 dock grouping, you must install the icon into the standard Freedesktop `hicolor` theme directory and match the `StartupWMClass`.
 
-First, copy the icon to your local share:
+**Install the icon using the official standard:**
 ```bash
-mkdir -p ~/.local/share/icons/hicolor/256x256/apps/
-cp /path/to/vscode-tarball-updater/code-stable/resources/app/resources/linux/code.png ~/.local/share/icons/hicolor/256x256/apps/vscode.png
+xdg-icon-resource install --context apps --size 256 /path/to/vscode-tarball-updater/code-stable/resources/app/resources/linux/code.png code
 ```
 
-Then, create the desktop entry `~/.local/share/applications/code.desktop`:
+**Create the desktop entry:**
+Create a file at `~/.local/share/applications/code.desktop`:
 ```ini
 [Desktop Entry]
 Name=Visual Studio Code
 Comment=Code Editing. Redefined.
 Exec=/path/to/vscode-tarball-updater/vscode_updater.py %F
-Icon=vscode
-Terminal=false
+Icon=code
 Type=Application
+StartupNotify=false
+StartupWMClass=Code
 Categories=TextEditor;Development;IDE;
 ```
+
+*(Note: The official `StartupWMClass` for the stable release of VS Code on Linux is `Code`.)*
 
 ### Manual Updating
 If you prefer to force an update visibly instead of waiting for the background daemon, you can run:
@@ -77,3 +80,4 @@ If you prefer to force an update visibly instead of waiting for the background d
 ## Requirements
 - Python 3.6+
 - `curl` (for download resumption and proxy support)
+- `xdg-utils` (optional, for `xdg-icon-resource`)
