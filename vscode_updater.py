@@ -7,6 +7,7 @@ import tarfile
 import subprocess
 import time
 import platform
+import hashlib
 
 # Parse CLI arguments early to configure globals
 args = sys.argv[1:]
@@ -48,6 +49,21 @@ def get_vscode_arch():
 # ==========================================
 # Helper: Resumable Downloader (via curl)
 # ==========================================
+def verify_sha256(file_path, expected_hash):
+    """Calculates the SHA256 hash of a file and compares it to the expected hash."""
+    if not expected_hash:
+        return True # Skip verification if API didn't provide a hash
+    
+    sha256 = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            sha256.update(data)
+            
+    return sha256.hexdigest() == expected_hash
+
 def download_resumable(url, dest, silent=False):
     """Downloads a file using curl, resuming from the existing file size if it exists."""
     cmd = ["curl", "-L", "-C", "-", "-o", dest]
@@ -133,6 +149,7 @@ def run_update(silent=False):
     download_url = payload.get("url")
     commit_hash = payload.get("version")
     product_version = payload.get("productVersion")
+    expected_sha256 = payload.get("sha256hash")
 
     if not download_url or not commit_hash or not product_version:
         log("Invalid API response.")
@@ -154,6 +171,12 @@ def run_update(silent=False):
         download_resumable(download_url, tar_file, silent=silent)
     except Exception as e:
         log(f"Download interrupted: {e}")
+        return
+
+    log("Verifying checksum...")
+    if not verify_sha256(tar_file, expected_sha256):
+        log("Error: Checksum validation failed! The download is corrupted.")
+        os.remove(tar_file) # Delete corrupted file so we start fresh next time
         return
 
     log("Extracting to versioned folder...")
