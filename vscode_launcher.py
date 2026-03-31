@@ -15,7 +15,20 @@ is_insider = "--insider" in args
 QUALITY = "insider" if is_insider else "stable"
 
 # Remove our custom arguments so they don't get passed to the real VS Code process
-launch_args = [a for a in args if a not in ("--insider", "--update-now", "--background-daemon")]
+launch_args = [a for a in args if a not in ("--insider", "--update-now", "--background-daemon", "--help")]
+
+# ==========================================
+# Help Message
+# ==========================================
+def print_help():
+    binary_name = os.path.basename(sys.argv[0])
+    print(f"VS Code Launcher & Updater Wrapper")
+    print(f"Usage: {binary_name} [options] [args...]")
+    print(f"\nOptions:")
+    print(f"  --insider          Use VS Code Insiders edition")
+    print(f"  --update-now       Force an immediate update check and install")
+    print(f"  --help             Show this help message")
+    print(f"\nAll other arguments are passed directly to the real VS Code binary.")
 
 # ==========================================
 # Configuration
@@ -226,6 +239,11 @@ def run_update(silent=False):
 # ==========================================
 if __name__ == "__main__":
     args = sys.argv[1:]
+
+    # 0. HELP MODE
+    if "--help" in args:
+        print_help()
+        sys.exit(0)
 
     # 1. MANUAL OVERRIDE MODE
     if "--update-now" in args:
